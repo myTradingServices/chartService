@@ -7,31 +7,31 @@ import (
 
 	"github.com/mmfshirokan/PriceService/proto/pb"
 	"github.com/mmfshirokan/chartService/internal/model"
-	"github.com/mmfshirokan/chartService/internal/repository"
+	"github.com/mmfshirokan/chartService/internal/service"
 	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
 type server struct {
-	conn   *grpc.ClientConn
-	candle repository.Cnadle
+	conn *grpc.ClientConn
+	serv service.Interface
 }
 
 type Receiver interface {
-	Receive()
+	Receive(time.Duration)
 }
 
-func New(connection *grpc.ClientConn, candle repository.Cnadle) Receiver {
+func New(connection *grpc.ClientConn, serv service.Interface) Receiver {
 	return &server{
-		conn:   connection,
-		candle: candle,
+		conn: connection,
+		serv: serv,
 	}
 }
 
-func (serv *server) Receive() {
+func (reciver *server) Receive(interval time.Duration) {
 	ctx := context.Background()
-	consumer := pb.NewConsumerClient(serv.conn)
+	consumer := pb.NewConsumerClient(reciver.conn)
 
 	stream, err := consumer.DataStream(ctx, &pb.RequestDataStream{Start: true})
 	if err != nil {
@@ -40,8 +40,7 @@ func (serv *server) Receive() {
 	}
 	defer stream.CloseSend()
 
-	BidCandle := newEmptyCandle("", "Bid")
-	AskCandle := newEmptyCandle("", "Ask")
+	symbolMap := make(map[string]chan model.Price)
 
 	for {
 		recv, err := stream.Recv()
@@ -54,20 +53,66 @@ func (serv *server) Receive() {
 			return
 		}
 
-		if BidCandle.Symbol == "" {
-			BidCandle.Symbol = recv.Symbol
-		}
-		if AskCandle.Symbol == "" {
-			AskCandle.Symbol = recv.Symbol
+		ch, ok := symbolMap[recv.Symbol]
+		if !ok {
+			ch = make(chan model.Price)
+			symbolMap[recv.Symbol] = ch
+			ch <- model.Price{
+				Symbol: recv.Symbol,
+				Bid:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
+				Ask:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
+				Date:   recv.Date,
+			}
+
+			go streamHandler(ctx, ch, interval, reciver.serv)
+
+			continue
 		}
 
-		if BidCandle.OpenTime.IsZero() {
-			BidCandle.OpenTime = recv.Date.AsTime()
-			BidCandle.Open = decimal.New(recv.Bid.Value, recv.Bid.Exp)
+		ch <- model.Price{
+			Symbol: recv.Symbol,
+			Bid:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
+			Ask:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
+			Date:   recv.Date,
 		}
-		if AskCandle.OpenTime.IsZero() {
-			AskCandle.OpenTime = recv.Date.AsTime()
-			AskCandle.Open = decimal.New(recv.Ask.Value, recv.Ask.Exp)
+	}
+}
+
+func streamHandler(ctx context.Context, ch chan model.Price, interval time.Duration, serv service.Interface) {
+	recv := <-ch
+	BidCandle := model.Candle{
+		Symbol:   recv.Symbol,
+		BidOrAsk: model.Bid,
+		Open:     decimal.New(recv.Bid.Value, recv.Ask.Exp),
+		OpenTime: recv.Date.AsTime(),
+		Interval: interval,
+	}
+	AskCandle := model.Candle{
+		Symbol:   recv.Symbol,
+		BidOrAsk: model.Ask,
+		Open:     decimal.New(recv.Bid.Value, recv.Ask.Exp),
+		OpenTime: recv.Date.AsTime(),
+		Interval: interval,
+	}
+
+	candlesAreEmpty := false
+
+	for {
+		if candlesAreEmpty {
+			BidCandle = model.Candle{
+				Open:     decimal.New(recv.Bid.Value, recv.Ask.Exp),
+				OpenTime: recv.Date.AsTime(),
+				Highest:  decimal.Zero,
+				Lowest:   decimal.Zero,
+			}
+			AskCandle = model.Candle{
+				Open:     decimal.New(recv.Bid.Value, recv.Ask.Exp),
+				OpenTime: recv.Date.AsTime(),
+				Highest:  decimal.Zero,
+				Lowest:   decimal.Zero,
+			}
+
+			candlesAreEmpty = false
 		}
 
 		if price := decimal.New(recv.Bid.Value, recv.Bid.Exp); BidCandle.Highest.LessThan(price) || BidCandle.Highest.IsZero() {
@@ -84,42 +129,23 @@ func (serv *server) Receive() {
 			AskCandle.Lowest = price
 		}
 
-		if time.Since(BidCandle.OpenTime) >= time.Minute {
-			BidCandle.CloseTime = time.Now()
+		if time.Since(BidCandle.OpenTime) >= interval && time.Since(AskCandle.OpenTime) >= interval {
 			BidCandle.Close = decimal.New(recv.Bid.Value, recv.Bid.Exp)
-
-			err = serv.candle.Add(ctx, BidCandle)
+			err := serv.Add(ctx, BidCandle)
 			if err != nil {
 				log.Errorf("SQL error occured: %v", err)
 				return
 			}
 
-			BidCandle = newEmptyCandle(recv.Symbol, "Bid")
-		}
-		if time.Since(AskCandle.OpenTime) >= time.Minute {
-			AskCandle.CloseTime = time.Now()
 			AskCandle.Close = decimal.New(recv.Ask.Value, recv.Ask.Exp)
-
-			err = serv.candle.Add(ctx, AskCandle)
+			err = serv.Add(ctx, AskCandle)
 			if err != nil {
 				log.Errorf("SQL error occured: %v", err)
 				return
 			}
 
-			AskCandle = newEmptyCandle(recv.Symbol, "Ask")
+			candlesAreEmpty = true
 		}
 	}
-}
 
-func newEmptyCandle(symbol, bidOrAsk string) model.Candle {
-	return model.Candle{
-		Symbol:    symbol,
-		BidOrAsk:  bidOrAsk,
-		Highest:   decimal.Zero,
-		Lowest:    decimal.Zero,
-		Open:      decimal.Zero,
-		Close:     decimal.Zero,
-		OpenTime:  time.Time{},
-		CloseTime: time.Time{},
-	}
 }

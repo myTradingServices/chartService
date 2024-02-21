@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mmfshirokan/chartService/internal/config"
@@ -13,7 +14,8 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
+	ctx := context.Background() // change to context with cancel
+	interval := time.Minute
 	conf, err := config.New()
 	if err != nil {
 		log.Errorf("Error occurred while parsing config: %v", err)
@@ -38,6 +40,8 @@ func main() {
 	dataStream := rpc.New(conn, repo)
 
 	forever := make(chan struct{})
-	go dataStream.Receive()
+
+	go dataStream.Receive(interval)
+
 	<-forever
 }

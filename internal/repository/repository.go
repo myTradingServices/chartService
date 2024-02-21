@@ -14,13 +14,13 @@ type repository struct {
 	dbpool *pgxpool.Pool
 }
 
-type Cnadle interface {
+type Interface interface { // TODO mabe change (to )
 	Add(ctx context.Context, cand model.Candle) error
-	Delete(ctx context.Context, symbol string) error
-	Get(ctx context.Context, symbol, bidOrAsk string, from time.Time) ([]model.Candle, error)
+	Delete(ctx context.Context, symbol string, bidOrAsk model.PriceType) error
+	Get(ctx context.Context, symbol string, interval time.Duration, bidOrAsk model.PriceType) ([]model.Candle, error)
 }
 
-func New(conn *pgxpool.Pool) Cnadle {
+func New(conn *pgxpool.Pool) Interface {
 	return &repository{
 		dbpool: conn,
 	}
@@ -37,20 +37,20 @@ func (repo *repository) Add(ctx context.Context, candle model.Candle) error {
 		candle.Open,
 		candle.Close,
 		candle.OpenTime,
-		candle.CloseTime,
+		candle.Interval,
 	)
 
 	return err
 }
 
-func (repo *repository) Delete(ctx context.Context, symbol string) error {
-	_, err := repo.dbpool.Exec(ctx, "DELETE FROM trading.candles WHERE symbol = $1", symbol)
+func (repo *repository) Delete(ctx context.Context, symbol string, bidOrAsk model.PriceType) error {
+	_, err := repo.dbpool.Exec(ctx, "DELETE FROM trading.candles WHERE symbol = $1 AND bid_or_ask = $2", symbol, bidOrAsk)
 
 	return err
 }
 
-func (repo *repository) Get(ctx context.Context, symbol, bidOrAsk string, from time.Time) ([]model.Candle, error) {
-	rows, err := repo.dbpool.Query(ctx, "SELECT * FROM trading.candles WHERE symbol = $1 AND open_time >= $2 AND bid_or_ask = $3", symbol, from, bidOrAsk)
+func (repo *repository) Get(ctx context.Context, symbol string, interval time.Duration, bidOrAsk model.PriceType) ([]model.Candle, error) {
+	rows, err := repo.dbpool.Query(ctx, "SELECT * FROM trading.candles WHERE symbol = $1 AND time_interval = $2 AND bid_or_ask = $3", symbol, interval, bidOrAsk)
 	if err != nil {
 		return nil, err
 	}
