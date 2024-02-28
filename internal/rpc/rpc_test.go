@@ -71,10 +71,10 @@ func TestReceive(t *testing.T) {
 
 	mocker.EXPECT().Add(ctx, mock.MatchedBy(func(c model.Candle) bool {
 		return c.BidOrAsk == model.Ask &&
-			c.Open.Equal(decimal.New(0, 0)) &&
-			c.Close.Equal(decimal.New(60, 0)) &&
+			c.Open.Equal(decimal.New(1, 0)) &&
+			c.Close.Equal(decimal.New(61, 0)) &&
 			c.Interval == time.Minute &&
-			c.Highest.Equal(decimal.New(60, 0)) &&
+			c.Highest.Equal(decimal.New(61, 0)) &&
 			c.Lowest.Equal(decimal.New(1, 0))
 	})).Return(nil)
 
@@ -83,6 +83,4 @@ func TestReceive(t *testing.T) {
 	time.Sleep(time.Second * 65)
 
 	mocker.AssertExpectations(t)
-	//mocker.AssertNumberOfCalls(t, "Add", 2)
-
 }

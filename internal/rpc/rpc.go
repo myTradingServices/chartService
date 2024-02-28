@@ -63,7 +63,7 @@ func (reciver *server) Receive(ctx context.Context, interval time.Duration) {
 			ch <- model.Price{
 				Symbol: recv.Symbol,
 				Bid:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
-				Ask:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
+				Ask:    model.Decim{Value: recv.Ask.Value, Exp: recv.Ask.Exp},
 				Date:   recv.Date,
 			}
 
@@ -73,7 +73,7 @@ func (reciver *server) Receive(ctx context.Context, interval time.Duration) {
 		ch <- model.Price{
 			Symbol: recv.Symbol,
 			Bid:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
-			Ask:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
+			Ask:    model.Decim{Value: recv.Ask.Value, Exp: recv.Ask.Exp},
 			Date:   recv.Date,
 		}
 		// log.Info("Data received: ", counter) // delete
@@ -86,14 +86,14 @@ func streamHandler(ctx context.Context, ch chan model.Price, interval time.Durat
 	BidCandle := model.Candle{
 		Symbol:   recv.Symbol,
 		BidOrAsk: model.Bid,
-		Open:     decimal.New(recv.Bid.Value, recv.Ask.Exp),
+		Open:     decimal.New(recv.Bid.Value, recv.Bid.Exp),
 		OpenTime: recv.Date.AsTime(),
 		Interval: interval,
 	}
 	AskCandle := model.Candle{
 		Symbol:   recv.Symbol,
 		BidOrAsk: model.Ask,
-		Open:     decimal.New(recv.Bid.Value, recv.Ask.Exp),
+		Open:     decimal.New(recv.Ask.Value, recv.Ask.Exp),
 		OpenTime: recv.Date.AsTime(),
 		Interval: interval,
 	}
@@ -103,13 +103,13 @@ func streamHandler(ctx context.Context, ch chan model.Price, interval time.Durat
 	for {
 		if candlesAreEmpty {
 			BidCandle = model.Candle{
-				Open:     decimal.New(recv.Bid.Value, recv.Ask.Exp),
+				Open:     decimal.New(recv.Bid.Value, recv.Bid.Exp),
 				OpenTime: recv.Date.AsTime(),
 				Highest:  decimal.Zero,
 				Lowest:   decimal.Zero,
 			}
 			AskCandle = model.Candle{
-				Open:     decimal.New(recv.Bid.Value, recv.Ask.Exp),
+				Open:     decimal.New(recv.Ask.Value, recv.Ask.Exp),
 				OpenTime: recv.Date.AsTime(),
 				Highest:  decimal.Zero,
 				Lowest:   decimal.Zero,
@@ -141,9 +141,6 @@ func streamHandler(ctx context.Context, ch chan model.Price, interval time.Durat
 			}
 
 			AskCandle.Close = decimal.New(recv.Ask.Value, recv.Ask.Exp)
-			// //tmp
-			// log.Info("bidorask: ", AskCandle.BidOrAsk, " lowest: ", AskCandle.Lowest.String(), " highest: ", AskCandle.Highest.String(), " close: ", AskCandle.Close.String(), " interval: ", AskCandle.Interval, " symbol: ", AskCandle.Symbol, " open: ", AskCandle.Open.String())
-			// //tmp
 			err = serv.Add(ctx, AskCandle)
 			if err != nil {
 				log.Errorf("SQL error occured: %v", err)

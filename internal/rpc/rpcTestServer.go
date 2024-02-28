@@ -30,7 +30,7 @@ func (t *testServer) DataStream(req *pb.RequestDataStream, stream pb.Consumer_Da
 				Exp:   0,
 			},
 			Ask: &pb.ResponseDataStreamDecimal{
-				Value: int64(i),
+				Value: int64(i + 1),
 				Exp:   0,
 			},
 			Symbol: "symb1",
