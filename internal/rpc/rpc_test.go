@@ -1,88 +1,88 @@
 package rpc
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"os/exec"
+	"net"
+	"os"
 	"testing"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
+	"github.com/mmfshirokan/PriceService/proto/pb"
+	"github.com/mmfshirokan/chartService/internal/model"
+	mocks "github.com/mmfshirokan/chartService/internal/rpc/mock"
+	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+)
+
+const (
+	target string = "localhost:2021"
 )
 
 func TestMain(m *testing.M) {
-	ctx := context.Background()
-
-	pool, err := dockertest.NewPool("")
+	lis, err := net.Listen("tcp", target)
 	if err != nil {
-		log.Errorf("Could not construct pool: %s", err)
+		log.Errorf("failed to listen: %v", err)
 	}
 
-	err = pool.Client.Ping()
-	if err != nil {
-		log.Errorf("Could not connect to Docker: %s", err)
-		return
-	}
+	rpcServer := grpc.NewServer()
+	testSonsumer := NewTestConsumerServer()
+	pb.RegisterConsumerServer(rpcServer, testSonsumer)
 
-	pgResource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Hostname:   "postgres_test",
-		Repository: "postgres",
-		Tag:        "latest",
-		Env: []string{
-			"POSTGRES_PASSWORD=pgpw4echo",
-			"POSTGRES_USER=echopguser",
-			"POSTGRES_DB=echodb",
-			"listen_addresses = '*'",
-		},
-	}, func(config *docker.HostConfig) {
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	})
-	if err != nil {
-		log.Errorf("Could not start resource: %s", err)
-		return
-	}
-
-	postgresHostAndPort := pgResource.GetHostPort("5432/tcp")
-	postgresUrl := fmt.Sprintf("postgres://echopguser:pgpw4echo@%s/echodb?sslmode=disable", postgresHostAndPort)
-
-	log.Info("Connecting to database on url: ", postgresUrl)
-
-	var dbpool *pgxpool.Pool
-	if err = pool.Retry(func() error {
-		dbpool, err = pgxpool.New(ctx, postgresUrl)
+	go func() {
+		err = rpcServer.Serve(lis)
 		if err != nil {
-			dbpool.Close()
-			log.Errorf("can't connect to the pgxpool: %v", err)
+			log.Error("rpc fatal error: Server can't start")
+			return
 		}
-		return dbpool.Ping(ctx)
-	}); err != nil {
-		log.Errorf("Could not connect to docker: %s", err)
+	}()
+
+	code := m.Run()
+
+	os.Exit(code)
+}
+
+func TestReceive(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*70)
+	defer cancel()
+
+	option := grpc.WithTransportCredentials(insecure.NewCredentials())
+	conn, err := grpc.Dial(target, option)
+	if err != nil {
+		log.Errorf("grpc connection error on %v: %v", target, err)
 		return
 	}
+	defer conn.Close()
 
-	commandArr := []string{
-		"-url=jdbc:postgresql://" + postgresHostAndPort + "/echodb",
-		"-user=echopguser",
-		"-password=pgpw4echo",
-		"-locations=filesystem:../../migrations/sql",
-		"-schemas=apps", //remove?
-		"-connectRetries=60",
-		"migrate",
-	}
-	cmd := exec.Command("flyway", commandArr[:]...)
-	var outb, errb bytes.Buffer
-	cmd.Stdout = &outb
-	cmd.Stderr = &errb
+	mocker := mocks.NewInterface(t)
+	recv := New(conn, mocker)
 
-	err = cmd.Run()
-	if err != nil {
-		log.Error(fmt.Printf("error: %s", err))
-	}
-	log.Info(fmt.Printf("out: %s%s", outb.String(), errb.String()))
+	mocker.EXPECT().Add(ctx, mock.MatchedBy(func(c model.Candle) bool {
+		return c.Symbol == "symb1" &&
+			c.BidOrAsk == model.Bid &&
+			c.Open.Equal(decimal.New(0, 0)) &&
+			c.Close.Equal(decimal.New(60, 0)) &&
+			c.Interval == time.Minute &&
+			c.Highest.Equal(decimal.New(60, 0)) &&
+			c.Lowest.Equal(decimal.New(1, 0))
+	})).Return(nil)
 
-	// TODO: finish
+	mocker.EXPECT().Add(ctx, mock.MatchedBy(func(c model.Candle) bool {
+		return c.BidOrAsk == model.Ask &&
+			c.Open.Equal(decimal.New(0, 0)) &&
+			c.Close.Equal(decimal.New(60, 0)) &&
+			c.Interval == time.Minute &&
+			c.Highest.Equal(decimal.New(60, 0)) &&
+			c.Lowest.Equal(decimal.New(1, 0))
+	})).Return(nil)
+
+	go recv.Receive(ctx, time.Minute)
+
+	time.Sleep(time.Second * 65)
+
+	mocker.AssertExpectations(t)
+	//mocker.AssertNumberOfCalls(t, "Add", 2)
+
 }

@@ -41,7 +41,7 @@ func main() {
 
 	forever := make(chan struct{})
 
-	go dataStream.Receive(interval)
+	go dataStream.Receive(ctx, interval)
 
 	<-forever
 }

@@ -19,7 +19,7 @@ type server struct {
 }
 
 type Receiver interface {
-	Receive(time.Duration)
+	Receive(context.Context, time.Duration)
 }
 
 func New(connection *grpc.ClientConn, serv service.Interface) Receiver {
@@ -29,8 +29,7 @@ func New(connection *grpc.ClientConn, serv service.Interface) Receiver {
 	}
 }
 
-func (reciver *server) Receive(interval time.Duration) {
-	ctx := context.Background()
+func (reciver *server) Receive(ctx context.Context, interval time.Duration) {
 	consumer := pb.NewConsumerClient(reciver.conn)
 
 	stream, err := consumer.DataStream(ctx, &pb.RequestDataStream{Start: true})
@@ -42,6 +41,7 @@ func (reciver *server) Receive(interval time.Duration) {
 
 	symbolMap := make(map[string]chan model.Price)
 
+	//counter := 1 // delete
 	for {
 		recv, err := stream.Recv()
 		if err == io.EOF {
@@ -57,14 +57,15 @@ func (reciver *server) Receive(interval time.Duration) {
 		if !ok {
 			ch = make(chan model.Price)
 			symbolMap[recv.Symbol] = ch
+
+			go streamHandler(ctx, ch, interval, reciver.serv)
+
 			ch <- model.Price{
 				Symbol: recv.Symbol,
 				Bid:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
 				Ask:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
 				Date:   recv.Date,
 			}
-
-			go streamHandler(ctx, ch, interval, reciver.serv)
 
 			continue
 		}
@@ -75,6 +76,8 @@ func (reciver *server) Receive(interval time.Duration) {
 			Ask:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
 			Date:   recv.Date,
 		}
+		// log.Info("Data received: ", counter) // delete
+		// counter++                            // delete
 	}
 }
 
@@ -138,6 +141,9 @@ func streamHandler(ctx context.Context, ch chan model.Price, interval time.Durat
 			}
 
 			AskCandle.Close = decimal.New(recv.Ask.Value, recv.Ask.Exp)
+			// //tmp
+			// log.Info("bidorask: ", AskCandle.BidOrAsk, " lowest: ", AskCandle.Lowest.String(), " highest: ", AskCandle.Highest.String(), " close: ", AskCandle.Close.String(), " interval: ", AskCandle.Interval, " symbol: ", AskCandle.Symbol, " open: ", AskCandle.Open.String())
+			// //tmp
 			err = serv.Add(ctx, AskCandle)
 			if err != nil {
 				log.Errorf("SQL error occured: %v", err)
@@ -146,6 +152,7 @@ func streamHandler(ctx context.Context, ch chan model.Price, interval time.Durat
 
 			candlesAreEmpty = true
 		}
+		recv = <-ch
 	}
 
 }

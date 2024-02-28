@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mmfshirokan/chartService/internal/model"
+	log "github.com/sirupsen/logrus"
 )
 
 // ADD validation:
@@ -55,14 +56,31 @@ func (repo *repository) Get(ctx context.Context, symbol string, interval time.Du
 		return nil, err
 	}
 
-	candleArr := make([]model.Candle, 40)
+	candleArr := []model.Candle{}
 	index := 0
 
 	for rows.Next() {
-		err = rows.Scan(candleArr[index])
+		tmpCandle := model.Candle{}
+
+		tmpString := ""
+
+		err = rows.Scan(
+			&tmpCandle.Symbol,
+			&tmpString, //&candleArr[index].BidOrAsk,
+			&tmpCandle.Highest,
+			&tmpCandle.Lowest,
+			&tmpCandle.Open,
+			&tmpCandle.Close,
+			&tmpCandle.OpenTime,
+			&tmpCandle.Interval,
+		)
 		if err != nil {
 			return nil, err
 		}
+
+		AddPriceType(tmpString, &tmpCandle)
+
+		candleArr = append(candleArr, tmpCandle)
 
 		index++
 	}
@@ -72,4 +90,18 @@ func (repo *repository) Get(ctx context.Context, symbol string, interval time.Du
 	}
 
 	return candleArr, nil
+}
+
+func AddPriceType(str string, c *model.Candle) {
+	if str == "Ask" || str == "ask" {
+		c.BidOrAsk = model.Ask
+		return
+	}
+
+	if str == "Bid" || str == "bid" {
+		c.BidOrAsk = model.Bid
+		return
+	}
+
+	log.Error("Neither Bid or Ask is set.")
 }
