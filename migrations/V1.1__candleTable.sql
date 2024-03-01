@@ -1,7 +1,6 @@
-CREATE TYPE price_type AS ENUM ('ask', 'bid');
 CREATE TABLE candles (
     symbol VARCHAR(30),
-    bid_or_ask price_type,
+    bid_or_ask INT,
     highest_price DECIMAL,
     lowest_price DECIMAL,
     open_price DECIMAL,

@@ -151,7 +151,7 @@ func TestAdd(t *testing.T) {
 			assert.Nil(t, err, test.name)
 		}
 	}
-	log.Info("TestAdd Finished!\n")
+	log.Info("TestAdd Finished!")
 }
 
 func TestGet(t *testing.T) {
@@ -198,7 +198,7 @@ func TestGet(t *testing.T) {
 			}
 		}
 	}
-	log.Info("TestGet Finished!\n")
+	log.Info("TestGet Finished!")
 }
 
 func TestDelete(t *testing.T) { // test not cheking value deleted or not (pgxpool do not return error if not found)
@@ -233,5 +233,5 @@ func TestDelete(t *testing.T) { // test not cheking value deleted or not (pgxpoo
 			assert.Nil(t, err, test.name)
 		}
 	}
-	log.Info("TestDelete Finished!\n")
+	log.Info("TestDelete Finished!")
 }

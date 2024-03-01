@@ -21,3 +21,5 @@ type Candle struct { // Main DTO.
 func (c Candle) GetCloseTime() time.Time {
 	return c.OpenTime.Add(c.Interval)
 }
+
+// TODO: validate

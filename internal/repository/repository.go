@@ -6,7 +6,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mmfshirokan/chartService/internal/model"
-	log "github.com/sirupsen/logrus"
 )
 
 // ADD validation:
@@ -27,8 +26,8 @@ func New(conn *pgxpool.Pool) Interface {
 	}
 }
 
-func (repo *repository) Add(ctx context.Context, candle model.Candle) error {
-	_, err := repo.dbpool.Exec(
+func (r *repository) Add(ctx context.Context, candle model.Candle) error {
+	_, err := r.dbpool.Exec(
 		ctx,
 		"INSERT INTO trading.candles VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		candle.Symbol,
@@ -44,14 +43,14 @@ func (repo *repository) Add(ctx context.Context, candle model.Candle) error {
 	return err
 }
 
-func (repo *repository) Delete(ctx context.Context, symbol string, bidOrAsk model.PriceType) error {
-	_, err := repo.dbpool.Exec(ctx, "DELETE FROM trading.candles WHERE symbol = $1 AND bid_or_ask = $2", symbol, bidOrAsk)
+func (r *repository) Delete(ctx context.Context, symbol string, bidOrAsk model.PriceType) error {
+	_, err := r.dbpool.Exec(ctx, "DELETE FROM trading.candles WHERE symbol = $1 AND bid_or_ask = $2", symbol, bidOrAsk)
 
 	return err
 }
 
-func (repo *repository) Get(ctx context.Context, symbol string, interval time.Duration, bidOrAsk model.PriceType) ([]model.Candle, error) {
-	rows, err := repo.dbpool.Query(ctx, "SELECT * FROM trading.candles WHERE symbol = $1 AND time_interval = $2 AND bid_or_ask = $3", symbol, interval, bidOrAsk)
+func (r *repository) Get(ctx context.Context, symbol string, interval time.Duration, bidOrAsk model.PriceType) ([]model.Candle, error) {
+	rows, err := r.dbpool.Query(ctx, "SELECT * FROM trading.candles WHERE symbol = $1 AND time_interval = $2 AND bid_or_ask = $3", symbol, interval, bidOrAsk)
 	if err != nil {
 		return nil, err
 	}
@@ -62,11 +61,9 @@ func (repo *repository) Get(ctx context.Context, symbol string, interval time.Du
 	for rows.Next() {
 		tmpCandle := model.Candle{}
 
-		tmpString := ""
-
 		err = rows.Scan(
 			&tmpCandle.Symbol,
-			&tmpString, //&candleArr[index].BidOrAsk,
+			&tmpCandle.BidOrAsk,
 			&tmpCandle.Highest,
 			&tmpCandle.Lowest,
 			&tmpCandle.Open,
@@ -78,8 +75,6 @@ func (repo *repository) Get(ctx context.Context, symbol string, interval time.Du
 			return nil, err
 		}
 
-		AddPriceType(tmpString, &tmpCandle)
-
 		candleArr = append(candleArr, tmpCandle)
 
 		index++
@@ -90,18 +85,4 @@ func (repo *repository) Get(ctx context.Context, symbol string, interval time.Du
 	}
 
 	return candleArr, nil
-}
-
-func AddPriceType(str string, c *model.Candle) {
-	if str == "Ask" || str == "ask" {
-		c.BidOrAsk = model.Ask
-		return
-	}
-
-	if str == "Bid" || str == "bid" {
-		c.BidOrAsk = model.Bid
-		return
-	}
-
-	log.Error("Neither Bid or Ask is set.")
 }

@@ -29,8 +29,8 @@ func New(connection *grpc.ClientConn, serv service.Interface) Receiver {
 	}
 }
 
-func (reciver *server) Receive(ctx context.Context, interval time.Duration) {
-	consumer := pb.NewConsumerClient(reciver.conn)
+func (r *server) Receive(ctx context.Context, interval time.Duration) {
+	consumer := pb.NewConsumerClient(r.conn)
 
 	stream, err := consumer.DataStream(ctx, &pb.RequestDataStream{Start: true})
 	if err != nil {
@@ -58,7 +58,7 @@ func (reciver *server) Receive(ctx context.Context, interval time.Duration) {
 			ch = make(chan model.Price)
 			symbolMap[recv.Symbol] = ch
 
-			go streamHandler(ctx, ch, interval, reciver.serv)
+			go streamHandler(ctx, ch, interval, r.serv)
 
 			ch <- model.Price{
 				Symbol: recv.Symbol,

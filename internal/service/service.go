@@ -19,19 +19,19 @@ type Interface interface {
 }
 
 func New(repo repository.Interface) Interface {
-	return service{
+	return &service{
 		repo: repo,
 	}
 }
 
-func (serv service) Add(ctx context.Context, cand model.Candle) error {
-	return serv.Add(ctx, cand)
+func (s *service) Add(ctx context.Context, cand model.Candle) error {
+	return s.Add(ctx, cand)
 }
 
-func (serv service) Delete(ctx context.Context, symbol string, bidOrAsk model.PriceType) error {
-	return serv.Delete(ctx, symbol, bidOrAsk)
+func (s *service) Delete(ctx context.Context, symbol string, bidOrAsk model.PriceType) error {
+	return s.Delete(ctx, symbol, bidOrAsk)
 }
 
-func (serv service) Get(ctx context.Context, symbol string, interval time.Duration, bidOrAsk model.PriceType) ([]model.Candle, error) {
-	return serv.Get(ctx, symbol, interval, bidOrAsk)
+func (s *service) Get(ctx context.Context, symbol string, interval time.Duration, bidOrAsk model.PriceType) ([]model.Candle, error) {
+	return s.Get(ctx, symbol, interval, bidOrAsk)
 }
