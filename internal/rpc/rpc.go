@@ -13,6 +13,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+// TODO change model decim to shopspring/decimal
+
 type server struct {
 	conn *grpc.ClientConn
 	serv service.Interface
@@ -41,7 +43,6 @@ func (r *server) Receive(ctx context.Context, interval time.Duration) {
 
 	symbolMap := make(map[string]chan model.Price)
 
-	//counter := 1 // delete
 	for {
 		recv, err := stream.Recv()
 		if err == io.EOF {
@@ -76,8 +77,6 @@ func (r *server) Receive(ctx context.Context, interval time.Duration) {
 			Ask:    model.Decim{Value: recv.Ask.Value, Exp: recv.Ask.Exp},
 			Date:   recv.Date,
 		}
-		// log.Info("Data received: ", counter) // delete
-		// counter++                            // delete
 	}
 }
 

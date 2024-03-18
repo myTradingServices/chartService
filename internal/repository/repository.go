@@ -29,7 +29,7 @@ func New(conn *pgxpool.Pool) Interface {
 func (r *repository) Add(ctx context.Context, candle model.Candle) error {
 	_, err := r.dbpool.Exec(
 		ctx,
-		"INSERT INTO trading.candles VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+		"INSERT INTO trading.candles (symbol, bid_or_ask, highest_price, lowest_price, open_price, close_pirce, open_time, time_interval) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		candle.Symbol,
 		candle.BidOrAsk,
 		candle.Highest,
@@ -50,7 +50,7 @@ func (r *repository) Delete(ctx context.Context, symbol string, bidOrAsk model.P
 }
 
 func (r *repository) Get(ctx context.Context, symbol string, interval time.Duration, bidOrAsk model.PriceType) ([]model.Candle, error) {
-	rows, err := r.dbpool.Query(ctx, "SELECT * FROM trading.candles WHERE symbol = $1 AND time_interval = $2 AND bid_or_ask = $3", symbol, interval, bidOrAsk)
+	rows, err := r.dbpool.Query(ctx, "SELECT (symbol, bid_or_ask, highest_price, lowest_price, open_price, close_pirce, open_time, time_interval) FROM trading.candles WHERE symbol = $1 AND time_interval = $2 AND bid_or_ask = $3", symbol, interval, bidOrAsk)
 	if err != nil {
 		return nil, err
 	}

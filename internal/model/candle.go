@@ -8,8 +8,8 @@ import (
 )
 
 type Candle struct { // Main DTO.
-	Symbol   string          `validate:"max=6"`     // Broker symbol.
-	BidOrAsk PriceType       `validate:"oneof:0,1"` // Either bid or Ask.
+	Symbol   string          `validate:"max=6"`       // Broker symbol.
+	BidOrAsk PriceType       `validate:"oneof:0,1,2"` // Either bid or Ask.
 	Highest  decimal.Decimal // Highest price value in given time interval.
 	Lowest   decimal.Decimal // Lowest price value in given time interval.
 	Open     decimal.Decimal // Price at the begining of time interval.
@@ -22,4 +22,4 @@ func (c Candle) GetCloseTime() time.Time {
 	return c.OpenTime.Add(c.Interval)
 }
 
-// TODO: validate
+// TODO: add validate method for Candle struct

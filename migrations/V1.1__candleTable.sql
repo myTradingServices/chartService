@@ -1,4 +1,4 @@
-CREATE TABLE candles (
+CREATE TABLE trading.candles (
     symbol VARCHAR(30),
     bid_or_ask INT,
     highest_price DECIMAL,
