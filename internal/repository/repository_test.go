@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -101,9 +100,6 @@ func TestMain(m *testing.M) {
 		"migrate",
 	}
 	cmd := exec.Command("flyway", commandArr[:]...)
-	var outb, errb bytes.Buffer
-	cmd.Stdout = &outb
-	cmd.Stderr = &errb
 
 	err = cmd.Run()
 	if err != nil {
