@@ -62,14 +62,7 @@ func (r *repository) Get(ctx context.Context, symbol string, interval time.Durat
 		tmpCandle := model.Candle{}
 
 		err = rows.Scan(
-			&tmpCandle.Symbol,
-			&tmpCandle.BidOrAsk,
-			&tmpCandle.Highest,
-			&tmpCandle.Lowest,
-			&tmpCandle.Open,
-			&tmpCandle.Close,
-			&tmpCandle.OpenTime,
-			&tmpCandle.Interval,
+			&tmpCandle,
 		)
 		if err != nil {
 			return nil, err

@@ -180,7 +180,10 @@ func TestGet(t *testing.T) {
 		if test.hasError {
 			assert.Error(t, err, test.name)
 		} else {
-			assert.Nil(t, err, test.name)
+			if ok := assert.Nil(t, err, test.name); !ok {
+				t.Error("Error is not nil:", err)
+				continue
+			}
 
 			for i := range test.actual {
 				assert.Equal(t, expected[i].BidOrAsk, test.actual[i].BidOrAsk)
