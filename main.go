@@ -14,6 +14,8 @@ import (
 )
 
 func main() {
+	log.Info("Starting chart service...")
+
 	ctx := context.Background() // change to context with cancel
 	interval := time.Minute
 	conf, err := config.New()
@@ -43,5 +45,6 @@ func main() {
 
 	go dataStream.Receive(ctx, interval)
 
+	log.Info("Chart service working...")
 	<-forever
 }

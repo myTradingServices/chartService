@@ -32,12 +32,20 @@ func New(connection *grpc.ClientConn, serv service.Interface) Receiver {
 }
 
 func (r *server) Receive(ctx context.Context, interval time.Duration) {
+	log.Info("Rpc recive started")
+
 	consumer := pb.NewConsumerClient(r.conn)
 
 	stream, err := consumer.DataStream(ctx, &pb.RequestDataStream{Start: true})
 	if err != nil {
-		log.Errorf("Error in DataStream: %v", err)
-		return
+		log.Errorf("Error in DataStream attempting to reconnect in 15 seconds: %v", err)
+		time.Sleep(time.Second * 15)
+
+		stream, err = consumer.DataStream(ctx, &pb.RequestDataStream{Start: true})
+		if err != nil {
+			log.Errorf("Reconnection failed exiting: %v", err)
+			return
+		}
 	}
 	defer stream.CloseSend()
 
@@ -50,38 +58,48 @@ func (r *server) Receive(ctx context.Context, interval time.Duration) {
 			break
 		}
 		if err != nil {
-			log.Errorf("Error occured: %v", err)
+			log.Errorf("Error occured: %v, exiting sream", err)
 			return
 		}
 
 		ch, ok := symbolMap[recv.Symbol]
 		if !ok {
+			log.Info("New symbol handling started: ", recv.Symbol)
+
 			ch = make(chan model.Price)
 			symbolMap[recv.Symbol] = ch
 
 			go streamHandler(ctx, ch, interval, r.serv)
 
+			log.Info("Sending price for the first time trough ch for ", recv.Symbol)
 			ch <- model.Price{
 				Symbol: recv.Symbol,
 				Bid:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
 				Ask:    model.Decim{Value: recv.Ask.Value, Exp: recv.Ask.Exp},
 				Date:   recv.Date,
 			}
+			log.Infof("Sending price for the first time trough ch for %v completed", recv.Symbol)
 
 			continue
 		}
 
+		log.Info("Sending trough ch price for ", recv.Symbol)
 		ch <- model.Price{
 			Symbol: recv.Symbol,
 			Bid:    model.Decim{Value: recv.Bid.Value, Exp: recv.Bid.Exp},
 			Ask:    model.Decim{Value: recv.Ask.Value, Exp: recv.Ask.Exp},
 			Date:   recv.Date,
 		}
+		log.Infof("Sending price trough ch for %v completed", recv.Symbol)
+
 	}
 }
 
 func streamHandler(ctx context.Context, ch chan model.Price, interval time.Duration, serv service.Interface) {
+	log.Info("Stream handler started; first recv price from ch")
 	recv := <-ch
+	log.Info("First recv price from ch completed (stream handler)")
+
 	BidCandle := model.Candle{
 		Symbol:   recv.Symbol,
 		BidOrAsk: model.Bid,
@@ -102,14 +120,20 @@ func streamHandler(ctx context.Context, ch chan model.Price, interval time.Durat
 	for {
 		if candlesAreEmpty {
 			BidCandle = model.Candle{
+				Symbol:   recv.Symbol,
 				Open:     decimal.New(recv.Bid.Value, recv.Bid.Exp),
+				BidOrAsk: model.Bid,
 				OpenTime: recv.Date.AsTime(),
+				Interval: interval,
 				Highest:  decimal.Zero,
 				Lowest:   decimal.Zero,
 			}
 			AskCandle = model.Candle{
+				Symbol:   recv.Symbol,
 				Open:     decimal.New(recv.Ask.Value, recv.Ask.Exp),
+				BidOrAsk: model.Ask,
 				OpenTime: recv.Date.AsTime(),
+				Interval: interval,
 				Highest:  decimal.Zero,
 				Lowest:   decimal.Zero,
 			}
@@ -135,20 +159,27 @@ func streamHandler(ctx context.Context, ch chan model.Price, interval time.Durat
 			BidCandle.Close = decimal.New(recv.Bid.Value, recv.Bid.Exp)
 			err := serv.Add(ctx, BidCandle)
 			if err != nil {
-				log.Errorf("SQL error occured: %v", err)
-				return
+				log.Errorf("SQL error occured while attempting to save bid candle: %v", err)
+				//break //return
+			} else {
+				log.Info("Bid candle Added to DB")
 			}
 
 			AskCandle.Close = decimal.New(recv.Ask.Value, recv.Ask.Exp)
 			err = serv.Add(ctx, AskCandle)
 			if err != nil {
-				log.Errorf("SQL error occured: %v", err)
-				return
+				log.Errorf("SQL error occured while attempting to save ask candle: %v", err)
+				//break //return
+			} else {
+				log.Info("Ask candle Added to DB")
 			}
 
 			candlesAreEmpty = true
 		}
+
+		log.Info("Stream handler recv new price...")
 		recv = <-ch
+		log.Info("Stream handler recv new price completed")
 	}
 
 }

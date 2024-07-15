@@ -177,7 +177,6 @@ func TestGet(t *testing.T) {
 			assert.Error(t, err, test.name)
 		} else {
 			if ok := assert.Nil(t, err, test.name); !ok {
-				t.Error("Error is not nil:", err)
 				continue
 			}
 
